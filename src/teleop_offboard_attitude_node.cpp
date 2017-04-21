@@ -1,79 +1,201 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Joy.h>
 #include <mavros_msgs/AttitudeTarget.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <tf2/LinearMath/Quaternion.h>
 
 #include <string.h>
 
+sensor_msgs::Joy joy_last_;
+
 class TeleopAttitude {
 	public:
-		TeleopAttitude();
+		TeleopAttitude( ros::NodeHandle *nh );
+		void spin( void );
 
 	private:
-	  void joyCallback(const sensor_msgs::Joy::ConstPtr& joy);
+		void joyCallback( const sensor_msgs::Joy::ConstPtr& joy );
 
 	private:
-	  ros::NodeHandle nh_;
+		ros::NodeHandle *nh_;
 
-	  int param_axis_roll_, param_axis_pitch_, param_axis_yaw_r_, param_axis_throttle_;
-	  double param_scale_a, param_scale_r_;
-	  
-	  std::string param_joy_input;
-	  
-	  ros::Publisher att_pub_;
-	  ros::Subscriber joy_sub_;
+		std::string param_input_joy_;
+		std::string param_output_setpoint_;
+		std::string param_output_viz_att_;
+		
+		int param_axis_roll_, param_axis_pitch_, param_axis_yaw_;
+		int param_axis_roll_r_, param_axis_pitch_r_, param_axis_yaw_r_;
+		int param_axis_throttle_;
+		
+		double param_scale_a_r_, param_scale_a_p_, param_scale_a_y_;
+		double param_scale_r_r_, param_scale_r_p_, param_scale_r_y_;
+		bool param_full_range_throttle_;
+		
+		double param_spin_rate_;
+		std::string param_frame_id_;
+		bool param_viz_;
+		
+		ros::Subscriber joy_sub_;
+		
+		ros::Publisher sp_pub_;
+		ros::Publisher viz_att_pub_;
+		
+		ros::Rate rate_;
 };
 
-TeleopAttitude::TeleopAttitude():
-	param_axis_roll_(1),
-	param_axis_pitch_(2),
-	param_axis_yaw_r_(3),
-	param_axis_throttle_(4),
-	param_joy_input("/joy") {
+TeleopAttitude::TeleopAttitude( ros::NodeHandle *nh ):
+	nh_( nh ),
+	param_input_joy_("/joy"),
+	param_output_setpoint_("setpoint_raw"),
+	param_output_viz_att_("goal/attitude"),
+	param_axis_roll_(-1),
+	param_axis_pitch_(-1),
+	param_axis_yaw_(-1),
+	param_axis_roll_r_(-1),
+	param_axis_pitch_r_(-1),
+	param_axis_yaw_r_(-1),
+	param_axis_throttle_(-1),
+	param_full_range_throttle_(false),
+	param_frame_id_("/world"),
+	param_spin_rate_(20.0f),
+	rate_(20.0f),
+	param_viz_(false) {
 	
 	ROS_INFO("[Teleop] Starting...");
 
-	nh_.param("axis/roll", param_axis_roll_, param_axis_roll_);
-	nh_.param("axis/pitch", param_axis_pitch_, param_axis_pitch_);
-	nh_.param("axis/yaw_r", param_axis_yaw_r_, param_axis_yaw_r_);
-	nh_.param("axis/throttle", param_axis_throttle_, param_axis_throttle_);
+	nh_->param("input_joy", param_input_joy_, param_input_joy_);
+	nh_->param("output_setpoint", param_output_setpoint_, param_output_setpoint_);
+	nh_->param("output_viz/attitude", param_output_viz_att_, param_output_viz_att_);
+
+	nh_->param("axis/roll", param_axis_roll_, param_axis_roll_);
+	nh_->param("axis/pitch", param_axis_pitch_, param_axis_pitch_);
+	nh_->param("axis/yaw", param_axis_yaw_, param_axis_yaw_);
+	nh_->param("axis/roll_r", param_axis_roll_r_, param_axis_roll_r_);
+	nh_->param("axis/pitch_r", param_axis_pitch_r_, param_axis_pitch_r_);
+	nh_->param("axis/yaw_r", param_axis_yaw_r_, param_axis_yaw_r_);
+	nh_->param("axis/throttle", param_axis_throttle_, param_axis_throttle_);
 	
-	nh_.param("scale/angular", param_scale_a, param_scale_a);	//Effectively sets the max roll/pitch angles (rad)
-	nh_.param("scale/rate", param_scale_r_, param_scale_r_);	//Sets how quickly yaw will rotate (rad/s)
+	nh_->param("scale/angular/roll", param_scale_a_r_, param_scale_a_r_);		//Effectively sets the max roll angle (rad)
+	nh_->param("scale/angular/pitch", param_scale_a_p_, param_scale_a_p_);		//Effectively sets the max pitch angle (rad)
+	nh_->param("scale/angular/yaw", param_scale_a_y_, param_scale_a_y_);		//Effectively sets the max yaw angle (rad)
+	nh_->param("scale/rate/roll", param_scale_r_r_, param_scale_r_r_);			//Sets how quickly roll will rotate (rad/s)
+	nh_->param("scale/rate/pitch", param_scale_r_p_, param_scale_r_p_);			//Sets how quickly pitch will rotate (rad/s)
+	nh_->param("scale/rate/yaw", param_scale_r_y_, param_scale_r_y_);			//Sets how quickly yaw will rotate (rad/s)
+	nh_->param("full_range_throttle", param_full_range_throttle_, param_full_range_throttle_);
+	
+	nh_->param("spin_rate", param_spin_rate_, param_spin_rate_);
+	nh_->param("frame_id", param_frame_id_, param_frame_id_);
+	nh_->param("show_vizualizer", param_viz_, param_viz_);
+	
+	joy_sub_ = nh_->subscribe<sensor_msgs::Joy>(param_input_joy_, 10, &TeleopAttitude::joyCallback, this);		
 
-	att_pub_ = nh_.advertise<mavros_msgs::AttitudeTarget>("setpoint_raw/attitude", 10);
-
-	joy_sub_ = nh_.subscribe<sensor_msgs::Joy>(param_joy_input, 10, &TeleopAttitude::joyCallback, this);
-
-	ROS_INFO("[Teleop] Listening to: %s", param_joy_input.c_str());
+	sp_pub_ = nh_->advertise<mavros_msgs::AttitudeTarget>(param_output_setpoint_, 10);
+	viz_att_pub_ = nh_->advertise<geometry_msgs::PoseStamped>(param_output_viz_att_, 10);
+	
+	rate_ = ros::Rate(param_spin_rate_);
+	
+	ROS_INFO("[Teleop] Listening to: %s", param_input_joy_.c_str());
 }
 
-void TeleopAttitude::joyCallback(const sensor_msgs::Joy::ConstPtr& joy) {
-	mavros_msgs::AttitudeTarget sp_att;
-	tf2::Quaternion sp_q;
+void TeleopAttitude::joyCallback( const sensor_msgs::Joy::ConstPtr& joy ) {
+	joy_last_ = *joy;
+}
+
+void TeleopAttitude::spin( void ) {
+	//Wait until we get at least 1 joy message
+	if(joy_last_.header.stamp > ros::Time(0.0f) ) {
+		ros::Time time_now = ros::Time::now();
+		mavros_msgs::AttitudeTarget sp_out;
+		geometry_msgs::PoseStamped viz_att_out;
+		tf2::Quaternion sp_q;
+
+		//==-- Attitude
+		double roll = 0.0f;
+		double pitch = 0.0f;
+		double yaw = 0.0f;
+		
+		if(param_axis_roll_ >= 0)
+			roll = param_scale_a_r_ * joy_last_.axes.at(param_axis_roll_);
+		if(param_axis_pitch_ >= 0)
+			pitch = param_scale_a_p_ * joy_last_.axes.at(param_axis_pitch_);
+		if(param_axis_yaw_ >= 0)
+			yaw = param_scale_a_y_ * joy_last_.axes.at(param_axis_yaw_);
+		
+		sp_q.setRPY(roll, pitch, yaw);
+
+		sp_out.orientation.w = sp_q.getW();
+		sp_out.orientation.x = sp_q.getX();
+		sp_out.orientation.y = sp_q.getY();
+		sp_out.orientation.z = sp_q.getZ();
+		
+		if( ( param_axis_roll_ < 0 ) && ( param_axis_pitch_ < 0 ) && ( param_axis_yaw_ < 0 ) )
+			sp_out.type_mask |= sp_out.IGNORE_ATTITUDE;
+		
+		//==-- Rates
+		if(param_axis_roll_r_ >= 0) {
+			sp_out.body_rate.x = param_scale_r_r_ * joy_last_.axes.at(param_axis_roll_r_);
+		} else {
+			sp_out.type_mask |= sp_out.IGNORE_ROLL_RATE;
+		}
+		
+		if(param_axis_pitch_r_ >= 0) {
+			sp_out.body_rate.y = param_scale_r_p_ * joy_last_.axes.at(param_axis_pitch_r_);
+		} else {
+			sp_out.type_mask |= sp_out.IGNORE_PITCH_RATE;
+		}
+		
+		if(param_axis_yaw_r_ >= 0) {
+			sp_out.body_rate.z = param_scale_r_y_ * joy_last_.axes.at(param_axis_yaw_r_);
+		} else {
+			sp_out.type_mask |= sp_out.IGNORE_YAW_RATE;
+		}
+		
+		//==-- Thottle
+		if(param_axis_throttle_ >= 0) {
+			if( !param_full_range_throttle_ ) {
+				sp_out.thrust = joy_last_.axes.at(param_axis_throttle_);
+			} else {
+				sp_out.thrust = ( joy_last_.axes.at(param_axis_throttle_) / 2 ) + 0.5f;
+			}
+		} else {
+			sp_out.type_mask |= sp_out.IGNORE_THRUST;
+		}
+		
+		//==-- Publish
+		sp_out.header.stamp = time_now;
+		sp_out.header.frame_id = param_frame_id_;
+		sp_pub_.publish(sp_out);
+		
+		//==-- Visualization
+		if( param_viz_ ) {
+			//Attitude
+			if( !( sp_out.type_mask & sp_out.IGNORE_ATTITUDE ) ) {
+				viz_att_out.pose.orientation = sp_out.orientation;
+
+				viz_att_out.header.stamp = time_now;
+				viz_att_out.header.frame_id = param_frame_id_;
+				viz_att_pub_.publish(viz_att_out);
+			}
+			
+			//TODO: Rates?
+			
+			//TODO: Throttle?		
+		}
+	}
 	
-	double roll = param_scale_a*joy->axes[param_axis_roll_];
-	double pitch = param_scale_a*joy->axes[param_axis_pitch_];
-	sp_q.setRPY(roll, pitch, 0.0f);
-	
-	sp_att.orientation.w = sp_q.getW();
-	sp_att.orientation.x = sp_q.getX();
-	sp_att.orientation.y = sp_q.getY();
-	sp_att.orientation.z = sp_q.getZ();
-	
-	sp_att.body_rate.z = param_scale_r_*joy->axes[param_axis_yaw_r_];
-	
-	sp_att.thrust = joy->axes[param_axis_throttle_];
-	
-	sp_att.type_mask |= sp_att.IGNORE_ROLL_RATE | sp_att.IGNORE_PITCH_RATE;
-	
-	att_pub_.publish(sp_att);
+	ros::spinOnce();
+	rate_.sleep();
 }
 
 
 int main(int argc, char** argv) {
-	ros::init(argc, argv, "teleop_attitude");
-	TeleopAttitude teleop_attitude;
+	ros::init( argc, argv, "teleop_attitude" );
+	ros::NodeHandle nh( ros::this_node::getName() );
 
-	ros::spin();
+	TeleopAttitude teleop_attitude( &nh );
+
+	while( ros::ok() )
+		teleop_attitude.spin();
+	
+	return 0;
 }

@@ -40,16 +40,20 @@
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
+  
   <build_depend>joy</build_depend>
   <build_depend>mavros</build_depend>
   <build_depend>mavros_msgs</build_depend>
   <build_depend>sensor_msgs</build_depend>
+  <build_depend>geometry_msgs</build_depend>
   <build_depend>tf2</build_depend>
   <build_depend>roscpp</build_depend>
+  
   <run_depend>joy</run_depend>
   <run_depend>mavros</run_depend>
   <run_depend>mavros_msgs</run_depend>
   <run_depend>sensor_msgs</run_depend>
+  <run_depend>geometry_msgs</run_depend>
   <run_depend>tf2</run_depend>
   <run_depend>roscpp</run_depend>
 

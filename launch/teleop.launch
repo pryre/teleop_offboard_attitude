@@ -2,22 +2,43 @@
   <!-- Joystick Node -->
   <node respawn="true" pkg="joy"
         type="joy_node" name="teleop_joy" >
-    <param name="dev" type="string" value="/dev/input/js2" />
-    <param name="deadzone" value="0.12" />
+    <param name="dev" type="string" value="/dev/input/js0" />
+    <param name="deadzone" value="0.01" />
   </node>
  
  
   <!-- Teleop Node -->
   <node pkg="teleop_offboard_attitude" type="teleop_offboard_attitude_node" name="teleop" output="screen" >
-
+    <!-- Config -->
+    <param name="update_rate" value="20" type="int"/>
+    <param name="frame_id" value="world" type="string"/>
+    <param name="show_vizualizer" value="true" type="bool"/>
+	
+	<!-- IO -->
+    <param name="input_joy" value="/joy" type="string"/>
+    <param name="output_setpoint" value="setpoint" type="string"/>
+    <param name="output_viz/attitude" value="goal/attitude" type="string"/>
+	
     <!-- Axes -->
-    <param name="axis/roll" value="1" type="int"/>
-    <param name="axis/pitch" value="2" type="int"/>
-    <param name="axis/yaw_r" value="3" type="int"/>
-    <param name="axis/throttle" value="4" type="int"/>
+    <!-- Set to -1 to disable -->
+    <param name="axis/roll" value="0" type="int"/>
+    <param name="axis/pitch" value="1" type="int"/>
+    <param name="axis/yaw" value="-1" type="int"/>
+    <param name="axis/roll_r" value="-1" type="int"/>
+    <param name="axis/pitch_r" value="-1" type="int"/>
+    <param name="axis/yaw_r" value="-1" type="int"/>
+    <param name="axis/throttle" value="2" type="int"/>
+	
+	<!-- Switch to say if throttle is -1->1 or 0->1 -->
+    <param name="full_range_throttle" value="true" type="bool"/>
 	
 	<!-- Scaling -->
-    <param name="scale/a" value="0.39" type="double"/>
-    <param name="scale/r" value="0.5" type="double"/>  
+	<!-- Set to (-) to reverse direction -->
+    <param name="scale/angular/roll" value="-0.39" type="double"/>
+    <param name="scale/angular/pitch" value="0.39" type="double"/>
+    <param name="scale/angular/yaw" value="3.14159265359" type="double"/>
+    <param name="scale/rate/roll" value="-0.25" type="double"/>  
+    <param name="scale/rate/pitch" value="0.25" type="double"/>  
+    <param name="scale/rate/yaw" value="0.5" type="double"/>  
   </node>
 </launch>

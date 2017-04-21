@@ -9,6 +9,7 @@ project(teleop_offboard_attitude)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   tf2
+  geometry_msgs
   sensor_msgs
   joy
   mavros
