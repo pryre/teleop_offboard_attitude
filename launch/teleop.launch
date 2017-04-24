@@ -10,13 +10,13 @@
   <!-- Teleop Node -->
   <node pkg="teleop_offboard_attitude" type="teleop_offboard_attitude_node" name="teleop" output="screen" >
     <!-- Config -->
-    <param name="update_rate" value="20" type="int"/>
+    <param name="spin_rate" value="50" type="int"/>
     <param name="frame_id" value="world" type="string"/>
     <param name="show_vizualizer" value="true" type="bool"/>
 	
 	<!-- IO -->
     <param name="input_joy" value="/joy" type="string"/>
-    <param name="output_setpoint" value="setpoint" type="string"/>
+    <param name="output_setpoint" value="/mavros/setpoint_raw/attitude" type="string"/>
     <param name="output_viz/attitude" value="goal/attitude" type="string"/>
 	
     <!-- Axes -->
