@@ -17,7 +17,7 @@
 
 	<!-- IO -->
     <!--remap from="/joy" to="/joy"/-->
-    <remap from="teleop/command/attitude" to="/mavros/setpoint_raw/attitude">
+    <remap from="~command/attitude" to="/mavros/setpoint_raw/attitude">
     <!--remap from="teleop/feedback/pose" to="/feedback/pose"-->
 
     <!-- Axes -->
